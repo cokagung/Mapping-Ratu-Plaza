@@ -113,9 +113,34 @@
     <input type="file" id="fileInput" accept=".json" onchange="importMarkers(event)" style="display: none;"> <!-- Hidden file input -->
     <button onclick="locateUser()">Find My Location</button>
     <button onclick="deleteAllMarkers()">Delete All</button>
+    <button onclick="saveMarkersToFirebase()">Save to Cloud</button>
+    <button onclick="loadMarkersFromFirebase()">Load from Cloud</button>
+
 </div>
     
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
 
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyD2dimW4R01hWM09D8D_ykDLD4oGwE8YIU",
+    authDomain: "mapping-f9836.firebaseapp.com",
+    projectId: "mapping-f9836",
+    storageBucket: "mapping-f9836.firebasestorage.app",
+    messagingSenderId: "105631510486",
+    appId: "1:105631510486:web:7c497dcd1a2020f3793e77",
+    measurementId: "G-EPWLXG9F6Z"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
 
 <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 <script>
@@ -155,6 +180,54 @@
         });
     }
     
+    function saveMarkersToFirebase() {
+    const savedMarkers = markers.map(marker => {
+        return {
+            lat: marker.getLatLng().lat,
+            lng: marker.getLatLng().lng,
+            name: marker.name,
+            color: getColorFromIconUrl(marker.options.icon.options.iconUrl),
+            image: marker.image || '' // Store image if available
+        };
+    });
+
+    // Save the markers data to Firebase
+    database.ref('markers').set(savedMarkers, (error) => {
+        if (error) {
+            alert("Data could not be saved." + error);
+        } else {
+            alert("Data saved successfully.");
+        }
+    });
+}
+function loadMarkersFromFirebase() {
+    database.ref('markers').once('value').then(snapshot => {
+        const data = snapshot.val();
+        if (data) {
+            data.forEach(savedMarker => {
+                const marker = L.marker([savedMarker.lat, savedMarker.lng], {
+                    draggable: true,
+                    icon: L.icon({
+                        iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${savedMarker.color}.png`,
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34]
+                    })
+                }).addTo(map);
+
+                marker.name = savedMarker.name;
+                marker.image = savedMarker.image;
+
+                updateMarkerPopup(marker, savedMarker.name, savedMarker.image, savedMarker.color);
+                updateMarkerTooltip(marker, savedMarker.name, savedMarker.image);
+
+                markers.push(marker);
+            });
+        }
+    }).catch(error => {
+        alert("Data could not be loaded." + error);
+    });
+}
 
     function addMarker() {
         var color = document.getElementById('color').value;

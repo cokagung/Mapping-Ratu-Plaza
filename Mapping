@@ -1,0 +1,396 @@
+<!DOCTYPE html>  
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Map with Editable Name, Image Upload, and Delete Option</title>
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+<style>
+    #mapid {
+        height: 600px;
+    }
+    .popup-content {
+        font-family: Arial, sans-serif;
+        color: #333;
+        max-width: 300px;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .popup-content img {
+        display: block;
+        margin: 8px 0;
+        width: 100%;
+        max-width: 150px;
+        height: auto;
+        border-radius: 8px;
+    }
+    .popup-content .button {
+        width: 100%; /* Make buttons full width */
+        padding: 8px;
+        margin: 5px 0; /* Add space between buttons */
+        font-size: 14px;
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        text-align: center;
+    }
+    .popup-content .button.delete {
+        background-color: #dc3545;
+    }
+    .popup-content .button:hover {
+        opacity: 0.9;
+    }
+    .popup-content input[type="file"] {
+        display: none;
+    }
+    .popup-content label {
+        padding: 8px 12px;
+        background-color: #28a745;
+        color: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .popup-content input[type="text"] {
+        width: 100%;
+        margin: 8px 0;
+        padding: 6px;
+        font-size: 14px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+    }
+    /* Tooltip styling */
+    /* Tooltip styling */
+    .custom-tooltip {
+        display: flex;
+        flex-direction: column; /* Stack elements vertically */
+        align-items: center;
+        font-family: Arial, sans-serif;
+        font-size: 16px; /* Larger font size */
+        color: #333;
+        background-color: #ffffff; /* White background */
+        padding: 12px; /* More padding */
+        border: 1px solid #ddd; /* Light border */
+        border-radius: 10px; /* Rounded corners */
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Larger shadow for depth */
+        text-align: center;
+        transform: scale(1.1); /* Slightly larger scale */
+        transition: transform 0.2s ease-in-out; /* Smooth transition */
+    }
+
+    .custom-tooltip:hover {
+        transform: scale(1.2); /* Make tooltip grow slightly on hover */
+    }
+
+    .custom-tooltip img {
+        width: 60px; /* Larger image size */
+        height: 60px;
+        border-radius: 8px; /* Rounded image */
+        margin-top: 8px; /* Space between name and image */
+    }
+
+</style>
+</head>
+<body>
+
+<div id="mapid"></div>
+<div>
+    <label for="color">Choose marker color:</label>
+    <select id="color">
+        <option value="red">Red</option>
+        <option value="green">Green</option>
+        <option value="yellow">Yellow</option>
+    </select>
+    <input type="text" id="markerName" placeholder="Marker name">
+    <button onclick="addMarker()">Add Marker</button>
+    <button onclick="exportMarkers()">Save</button>
+    <button onclick="triggerFileInput()">Load</button> <!-- Custom Load button -->
+    <input type="file" id="fileInput" accept=".json" onchange="importMarkers(event)" style="display: none;"> <!-- Hidden file input -->
+    <button onclick="locateUser()">Find My Location</button>
+    <button onclick="deleteAllMarkers()">Delete All</button>
+</div>
+    
+
+
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<script>
+    var map = L.map('mapid').setView([-6.2269353,106.801093], 16);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+    }).addTo(map);
+
+    var markers = [];
+
+    function locateUser() {
+        // Request the user's location
+        map.locate({ setView: true, maxZoom: 16 });
+    
+        // Event listener for location found
+        map.on('locationfound', function(e) {
+            var radius = e.accuracy / 2;
+    
+            // Clear previous location marker if any
+            if (typeof userMarker !== 'undefined') {
+                map.removeLayer(userMarker);
+            }
+    
+            // Add a marker at the user's location
+            userMarker = L.marker(e.latlng).addTo(map)
+                .bindPopup("You are within " + radius.toFixed(1) + " meters from this point.")
+                .openPopup();
+    
+            // Add a circle to show the accuracy of the location
+            L.circle(e.latlng, radius).addTo(map);
+        });
+    
+        // Event listener for location error
+        map.on('locationerror', function() {
+            alert("Location access denied.");
+        });
+    }
+    
+
+    function addMarker() {
+        var color = document.getElementById('color').value;
+        var name = document.getElementById('markerName').value.trim() || 'Unnamed Marker';
+        
+        var marker = L.marker(map.getCenter(), {
+            draggable: true,
+            icon: L.icon({
+                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`,
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34]
+            })
+        }).addTo(map);
+    
+        // Store the name directly on the marker object if it hasn't been set before
+        marker.name = name !== 'Unnamed Marker' ? name : marker.name || 'Unnamed Marker';
+    
+        // Initialize marker with popup and tooltip
+        updateMarkerPopup(marker, marker.name);
+        updateMarkerTooltip(marker, marker.name);
+    
+        markers.push(marker);
+    
+        marker.on('dragend', function(event) {
+            var color = document.getElementById('color').value;
+            this.setIcon(L.icon({
+                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`,
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34]
+            }));
+        });
+    }
+    
+
+    // Function to update popup content with options to change name, upload image, and delete marker
+    function updateMarkerPopup(marker, name, imageSrc = '', selectedColor = 'red') {
+        var popupContent = `<div class="popup-content">
+            <b>Marker Name:</b>
+            <input type="text" id="name-input-${marker._leaflet_id}" value="${name}" placeholder="Enter name" style="width: 100%; margin-top: 5px; padding: 8px; font-size: 14px; border-radius: 5px; border: 1px solid #ccc;"><br>
+            <button class="button save" onclick="updateMarkerName(${marker._leaflet_id})">Save Name</button>
+            <label class="button choose" for="file-${marker._leaflet_id}">Choose Image</label>
+            <input type="file" id="file-${marker._leaflet_id}" accept="image/*" onchange="addImageToMarker(${marker._leaflet_id})" style="display: none;"><br>`;
+        if (imageSrc) {
+            popupContent += `<img src="${imageSrc}" alt="Marker Image" style="width: 100%; max-width: 100px; margin-top: 5px; border-radius: 5px;"><br>`;
+        }
+        // Add color selector dropdown
+        popupContent += `<label style="margin-top: 5px;">Marker Color:</label>
+            <select id="color-select-${marker._leaflet_id}" onchange="updateMarkerColor(${marker._leaflet_id})">
+                <option value="red" ${selectedColor === 'red' ? 'selected' : ''}>Red</option>
+                <option value="green" ${selectedColor === 'green' ? 'selected' : ''}>Green</option>
+                <option value="yellow" ${selectedColor === 'yellow' ? 'selected' : ''}>Yellow</option>
+            </select><br>`;
+        popupContent += `<button class="button delete" onclick="deleteMarker(${marker._leaflet_id})">Delete Marker</button></div>`;
+    
+        marker.bindPopup(popupContent).on('click', function(e) {
+            this.openPopup();
+        });
+    }
+    
+    // Function to update marker color based on dropdown selection
+    window.updateMarkerColor = function(markerId) {
+        var marker = markers.find(m => m._leaflet_id === markerId);
+        var color = document.getElementById(`color-select-${markerId}`).value;
+
+        // Update marker icon with the selected color
+        marker.setIcon(L.icon({
+            iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`,
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34]
+        }));
+    }
+
+    // Function to update the tooltip with the marker's name and image for hover effect
+    // Function to update the tooltip with the marker's name above the image
+    function updateMarkerTooltip(marker, name, imageSrc = '') {
+        var tooltipContent = `<div class="custom-tooltip">`;
+        tooltipContent += `<div><strong>${name}</strong></div>`; // Name goes above
+        if (imageSrc) {
+            tooltipContent += `<img src="${imageSrc}" alt="Marker Image">`; // Image below name
+        }
+        tooltipContent += `</div>`;
+        marker.bindTooltip(tooltipContent, { direction: 'top', permanent: false, className: 'custom-tooltip' });
+    }
+
+
+    // Function to update the marker's name and tooltip
+    window.updateMarkerName = function(markerId) {
+        var nameInput = document.getElementById(`name-input-${markerId}`);
+        var newName = nameInput.value;
+        var marker = markers.find(m => m._leaflet_id === markerId);
+    
+        // Update the marker's name property
+        marker.name = newName;
+    
+        // Retrieve the current image source if it exists in the popup content
+        var popupContent = marker.getPopup().getContent();
+        var imgTag = popupContent.match(/<img src="(.*?)"/);
+        var imageSrc = imgTag ? imgTag[1] : '';
+    
+        // Update popup with the new name and existing image
+        updateMarkerPopup(marker, newName, imageSrc);
+        updateMarkerTooltip(marker, newName, imageSrc); // Update tooltip with the new name and existing image
+        marker.openPopup(); // Re-open popup to show the updated name
+    };
+
+    // Function to add image to the marker tooltip and popup
+    window.addImageToMarker = function(markerId) {
+        var fileInput = document.getElementById(`file-${markerId}`);
+        if (fileInput.files && fileInput.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var imageSrc = e.target.result;
+                var marker = markers.find(m => m._leaflet_id === markerId);
+                var markerName = document.getElementById(`name-input-${markerId}`).value;
+                updateMarkerPopup(marker, markerName, imageSrc); // Update popup with image
+                updateMarkerTooltip(marker, markerName, imageSrc); // Update tooltip with image
+                marker.openPopup(); // Re-open popup to show the new content
+            };
+            reader.readAsDataURL(fileInput.files[0]); // Convert image to base64
+        }
+    };
+
+    // Function to delete a specific marker
+    window.deleteMarker = function(markerId) {
+        var marker = markers.find(m => m._leaflet_id === markerId);
+        if (marker) {
+            map.removeLayer(marker); // Remove from map
+            markers = markers.filter(m => m._leaflet_id !== markerId); // Remove from markers array
+            alert('Marker deleted!');
+        }
+    };
+
+    // Function to trigger the hidden file input
+function triggerFileInput() {
+    document.getElementById("fileInput").click();
+}
+
+// Function to export markers to a JSON file
+function exportMarkers() {
+    var savedMarkers = markers.map(function(marker) {
+        // Retrieve the name from the popup input field directly for export
+        var popupContent = marker.getPopup().getContent();
+        var nameInputMatch = popupContent.match(/id="name-input-\d+" value="([^"]*)"/);
+        var name = nameInputMatch ? nameInputMatch[1] : 'Unnamed Marker';
+        
+        // Extract image URL if available in popup content
+        var imgTag = popupContent.match(/<img src="(.*?)"/);
+        var imageSrc = imgTag ? imgTag[1] : '';
+
+        return {
+            lat: marker.getLatLng().lat,
+            lng: marker.getLatLng().lng,
+            color: getColorFromIconUrl(marker.options.icon.options.iconUrl),
+            name: name,
+            image: imageSrc
+        };
+    });
+
+    // Convert the markers data to JSON format
+    var dataStr = JSON.stringify(savedMarkers, null, 2);
+    var blob = new Blob([dataStr], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    
+    // Create a download link and trigger it
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "markers.json";
+    a.click();
+    URL.revokeObjectURL(url); // Clean up the URL object
+}
+
+
+
+// Function to import markers from a JSON file
+function importMarkers(event) {
+    var file = event.target.files[0];
+    if (file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var data = JSON.parse(e.target.result);
+
+            // Remove existing markers before loading new ones
+            deleteAllMarkers();
+
+            data.forEach(function(savedMarker) {
+                var marker = L.marker([savedMarker.lat, savedMarker.lng], {
+                    draggable: true,
+                    icon: L.icon({
+                        iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${savedMarker.color}.png`,
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34]
+                    })
+                }).addTo(map);
+
+                // Restore popup and tooltip with saved name and image
+                updateMarkerPopup(marker, savedMarker.name, savedMarker.image, savedMarker.color);
+                updateMarkerTooltip(marker, savedMarker.name, savedMarker.image);
+                
+                // Add the marker to the array of markers
+                markers.push(marker);
+
+                // Enable dragging event for color update
+                marker.on('dragend', function(event) {
+                    var color = document.getElementById('color').value;
+                    this.setIcon(L.icon({
+                        iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`,
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34]
+                    }));
+                });
+            });
+        };
+        reader.readAsText(file); // Read the file as text
+    }
+}
+
+
+
+    function deleteAllMarkers() {
+        if (confirm('Are you sure you want to delete ALL markers?')) {
+            markers.forEach(function(marker) {
+                map.removeLayer(marker);
+            });
+            markers = [];
+        }
+    }
+
+    function getColorFromIconUrl(iconUrl) {
+        return iconUrl.split('-').pop().split('.')[0];
+    }
+</script>
+
+</body>
+</html>

@@ -307,17 +307,62 @@
         var fileInput = document.getElementById(`file-${markerId}`);
         if (fileInput.files && fileInput.files[0]) {
             var reader = new FileReader();
+            
             reader.onload = function(e) {
-                var imageSrc = e.target.result;
-                var marker = markers.find(m => m._leaflet_id === markerId);
-                var markerName = document.getElementById(`name-input-${markerId}`).value;
-                updateMarkerPopup(marker, markerName, imageSrc); // Update popup with image
-                updateMarkerTooltip(marker, markerName, imageSrc); // Update tooltip with image
-                marker.openPopup(); // Re-open popup to show the new content
+                var image = new Image();
+                image.src = e.target.result;
+                
+                image.onload = function() {
+                    // Resize image
+                    var canvas = document.createElement('canvas');
+                    var ctx = canvas.getContext('2d');
+    
+                    // Define new dimensions (e.g., scale down to 200px width)
+                    var maxWidth = 200;
+                    var maxHeight = 200;
+    
+                    var width = image.width;
+                    var height = image.height;
+    
+                    // Scale the image proportionally
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height = Math.round(height * maxWidth / width);
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width = Math.round(width * maxHeight / height);
+                            height = maxHeight;
+                        }
+                    }
+    
+                    // Resize canvas to the new dimensions
+                    canvas.width = width;
+                    canvas.height = height;
+    
+                    // Draw the image onto the canvas
+                    ctx.drawImage(image, 0, 0, width, height);
+    
+                    // Convert the resized image to base64
+                    var resizedImageSrc = canvas.toDataURL('image/jpeg', 0.7); // Quality can be adjusted here (0.7 is 70% quality)
+    
+                    // Find the marker and update its popup and tooltip
+                    var marker = markers.find(m => m._leaflet_id === markerId);
+                    var markerName = document.getElementById(`name-input-${markerId}`).value;
+                    
+                    updateMarkerPopup(marker, markerName, resizedImageSrc); // Update popup with resized image
+                    updateMarkerTooltip(marker, markerName, resizedImageSrc); // Update tooltip with resized image
+                    
+                    marker.openPopup(); // Re-open popup to show the new content
+                };
             };
-            reader.readAsDataURL(fileInput.files[0]); // Convert image to base64
+            
+            // Start reading the file
+            reader.readAsDataURL(fileInput.files[0]);
         }
     };
+    
 
     // Function to delete a specific marker
     window.deleteMarker = function(markerId) {

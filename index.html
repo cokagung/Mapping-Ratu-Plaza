@@ -117,10 +117,9 @@
     <button onclick="triggerFileInput()">Load</button> <!-- Custom Load button -->
     <input type="file" id="fileInput" accept=".json" onchange="importMarkers(event)" style="display: none;"> <!-- Hidden file input -->
     <button onclick="locateUser()">Find My Location</button>
-    <button onclick="deleteAllMarkers()">Delete All</button>
     <button onclick="saveMarkersToFirebase()">Save to Cloud</button>
     <button onclick="loadMarkersFromFirebase()">Load from Cloud</button>
-
+    <button onclick="deleteAllMarkers()">Delete All</button>
 </div>
 
 <script>
@@ -192,81 +191,7 @@
             alert("Location access denied.");
         });
     }
-    function saveMarkersToFirebase() {
-        try {
-            const savedMarkers = window.markers.map(marker => {
-                const color = getColorFromIconUrl(marker.options.icon.options.iconUrl);
-                console.log("Saving marker:", {
-                    name: marker.name,
-                    image: marker.image,
-                    color: color
-                });
-                return {
-                    lat: marker.getLatLng().lat,
-                    lng: marker.getLatLng().lng,
-                    name: marker.name || 'Unnamed Marker',
-                    color: color || 'red',
-                    image: marker.image || ''
-                };
-            });
-            
-            return database.ref('markersData').set(savedMarkers)
-                .then(() => {
-                    console.log("Markers saved successfully:", savedMarkers);
-                    alert("Markers saved to cloud successfully!");
-                })
-                .catch((error) => {
-                    console.error("Error saving markers:", error);
-                    alert("Error saving markers: " + error.message);
-                });
-        } catch (error) {
-            console.error("Error preparing markers data:", error);
-            alert("Error preparing markers data: " + error.message);
-        }
-    }
     
-    function loadMarkersFromFirebase() {
-        database.ref('markersData').once('value')
-            .then((snapshot) => {
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    // Clear existing markers
-                    deleteAllMarkers();
-                    
-                    // Ensure data is an array
-                    const markersData = Array.isArray(data) ? data : [data];
-                    
-                    markersData.forEach(savedMarker => {
-                        if (savedMarker && savedMarker.lat && savedMarker.lng) {
-                            const marker = L.marker([savedMarker.lat, savedMarker.lng], {
-                                draggable: true,
-                                icon: L.icon({
-                                    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${savedMarker.color || 'red'}.png`,
-                                    iconSize: [25, 41],
-                                    iconAnchor: [12, 41],
-                                    popupAnchor: [1, -34]
-                                })
-                            }).addTo(window.map);
-
-                            marker.name = savedMarker.name || 'Unnamed Marker';
-                            marker.image = savedMarker.image || '';
-
-                            updateMarkerPopup(marker, marker.name, marker.image, savedMarker.color || 'red');
-                            updateMarkerTooltip(marker, marker.name, marker.image);
-
-                            window.markers.push(marker);
-                        }
-                    });
-                    alert("Markers loaded from cloud successfully!");
-                } else {
-                    alert("No markers found in the cloud.");
-                }
-            })
-            .catch((error) => {
-                console.error("Error loading markers:", error);
-                alert("Error loading markers: " + error.message);
-            });
-    }
     
     
 
@@ -494,6 +419,88 @@ function importMarkers(event) {
     }
 }
 
+
+function saveMarkersToFirebase() {
+    if (confirm('Are you sure you want to save to cloud?')) {
+        try {
+            const savedMarkers = window.markers.map(marker => {
+                // Extract image URL if available in popup content
+                var popupContent = marker.getPopup().getContent();
+                var imgTag = popupContent.match(/<img src="(.*?)"/);
+                var imageSrc = imgTag ? imgTag[1] : '';
+                const color = getColorFromIconUrl(marker.options.icon.options.iconUrl);
+                console.log("Saving marker:", {
+                    name: marker.name,
+                    image: imageSrc,
+                    color: color
+                });
+                return {
+                    lat: marker.getLatLng().lat,
+                    lng: marker.getLatLng().lng,
+                    name: marker.name || 'Unnamed Marker',
+                    color: color || 'red',
+                    image: imageSrc || ''
+                };
+            });
+            
+            return database.ref('markersData').set(savedMarkers)
+                .then(() => {
+                    console.log("Markers saved successfully:", savedMarkers);
+                    alert("Markers saved to cloud successfully!");
+                })
+                .catch((error) => {
+                    console.error("Error saving markers:", error);
+                    alert("Error saving markers: " + error.message);
+                });
+        } catch (error) {
+            console.error("Error preparing markers data:", error);
+            alert("Error preparing markers data: " + error.message);
+        }
+    }
+}
+
+function loadMarkersFromFirebase() {
+    database.ref('markersData').once('value')
+        .then((snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                // Clear existing markers
+                deleteAllMarkers();
+                
+                // Ensure data is an array
+                const markersData = Array.isArray(data) ? data : [data];
+                
+                markersData.forEach(savedMarker => {
+                    if (savedMarker && savedMarker.lat && savedMarker.lng) {
+                        const marker = L.marker([savedMarker.lat, savedMarker.lng], {
+                            draggable: true,
+                            icon: L.icon({
+                                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${savedMarker.color || 'red'}.png`,
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41],
+                                popupAnchor: [1, -34]
+                            })
+                        }).addTo(window.map);
+
+                        marker.name = savedMarker.name || 'Unnamed Marker';
+                        marker.image = savedMarker.image || '';
+
+                        updateMarkerPopup(marker, marker.name, marker.image, savedMarker.color || 'red');
+                        updateMarkerTooltip(marker, marker.name, marker.image);
+
+                        window.markers.push(marker);
+                    }
+                });
+                alert("Markers loaded from cloud successfully!");
+            } else {
+                alert("No markers found in the cloud.");
+            }
+        })
+        .catch((error) => {
+            console.error("Error loading markers:", error);
+            alert("Error loading markers: " + error.message);
+        });
+}
 
 
     function deleteAllMarkers() {

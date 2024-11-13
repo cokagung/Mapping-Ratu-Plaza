@@ -7,13 +7,9 @@
 <!-- Leaflet CSS -->
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
 
-   <!-- Firebase App (the core Firebase SDK) -->
-   <script type="module" src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js"></script>
-   <!-- Firebase Realtime Database SDK -->
-   <script type="module" src="https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js"></script>
-   <!-- Leaflet JS -->
-   <script type="module" src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script> 
 
 <style>
     #mapid {
@@ -130,22 +126,21 @@
 <script>
     
     // Your web app's Firebase configuration
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyD2dimW4R01hWM09D8D_ykDLD4oGwE8YIU",
-  authDomain: "mapping-f9836.firebaseapp.com",
-  databaseURL: "https://mapping-f9836-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "mapping-f9836",
-  storageBucket: "mapping-f9836.firebasestorage.app",
-  messagingSenderId: "105631510486",
-  appId: "1:105631510486:web:7c497dcd1a2020f3793e77",
-  measurementId: "G-EPWLXG9F6Z"
-};
+    const firebaseConfig = {
+      apiKey: "AIzaSyD2dimW4R01hWM09D8D_ykDLD4oGwE8YIU",
+      databaseURL: "https://mapping-f9836-default-rtdb.asia-southeast1.firebasedatabase.app/",
+      authDomain: "mapping-f9836.firebaseapp.com",
+      projectId: "mapping-f9836",
+      storageBucket: "mapping-f9836.firebasestorage.app",
+      messagingSenderId: "105631510486",
+      appId: "1:105631510486:web:7c497dcd1a2020f3793e77",
+      measurementId: "G-EPWLXG9F6Z"
+    };
   
-    // Initialize Firebase
     // Initialize Firebase
     const app = firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
+    
 
   </script>
   
@@ -157,6 +152,16 @@ const firebaseConfig = {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 18,
     }).addTo(map);
+
+    function validateMarkerData(marker) {
+        return {
+            lat: marker.getLatLng().lat || 0,
+            lng: marker.getLatLng().lng || 0,
+            name: marker.name || 'Unnamed Marker',
+            color: getColorFromIconUrl(marker.options.icon.options.iconUrl) || 'red',
+            image: marker.image || ''
+        };
+    }
 
     var markers = [];
 
@@ -188,60 +193,78 @@ const firebaseConfig = {
         });
     }
     function saveMarkersToFirebase() {
-        console.log("Attempting to save markers..."); // Debug log
-        const savedMarkers = markers.map(marker => ({
-            lat: marker.getLatLng().lat,
-            lng: marker.getLatLng().lng,
-            name: marker.name,
-            color: getColorFromIconUrl(marker.options.icon.options.iconUrl),
-            image: marker.image || '' // Store image if available
-        }));
-    
-        // Save the markers data to Firebase
-        firebase.database().ref('markers').set(savedMarkers)
-            .then(() => {
-                console.log("Data saved successfully."); // Debug log
-                alert("Data saved successfully.");
-            })
-            .catch((error) => {
-                console.error("Data could not be saved:", error); // Debug log
-                alert("Data could not be saved: " + error);
+        try {
+            const savedMarkers = window.markers.map(marker => {
+                const color = getColorFromIconUrl(marker.options.icon.options.iconUrl);
+                console.log("Saving marker:", {
+                    name: marker.name,
+                    image: marker.image,
+                    color: color
+                });
+                return {
+                    lat: marker.getLatLng().lat,
+                    lng: marker.getLatLng().lng,
+                    name: marker.name || 'Unnamed Marker',
+                    color: color || 'red',
+                    image: marker.image || ''
+                };
             });
+            
+            return database.ref('markersData').set(savedMarkers)
+                .then(() => {
+                    console.log("Markers saved successfully:", savedMarkers);
+                    alert("Markers saved to cloud successfully!");
+                })
+                .catch((error) => {
+                    console.error("Error saving markers:", error);
+                    alert("Error saving markers: " + error.message);
+                });
+        } catch (error) {
+            console.error("Error preparing markers data:", error);
+            alert("Error preparing markers data: " + error.message);
+        }
     }
     
     function loadMarkersFromFirebase() {
-        console.log("Attempting to load markers..."); // Debug log
-        get(ref(database, 'markers'))
+        database.ref('markersData').once('value')
             .then((snapshot) => {
                 if (snapshot.exists()) {
-                    console.log("Data loaded successfully."); // Debug log
                     const data = snapshot.val();
-                    data.forEach(savedMarker => {
-                        const marker = L.marker([savedMarker.lat, savedMarker.lng], {
-                            draggable: true,
-                            icon: L.icon({
-                                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${savedMarker.color}.png`,
-                                iconSize: [25, 41],
-                                iconAnchor: [12, 41],
-                                popupAnchor: [1, -34]
-                            })
-                        }).addTo(map);
-        
-                        marker.name = savedMarker.name;
-                        marker.image = savedMarker.image;
-        
-                        updateMarkerPopup(marker, savedMarker.name, savedMarker.image, savedMarker.color);
-                        updateMarkerTooltip(marker, savedMarker.name, savedMarker.image);
-        
-                        markers.push(marker);
+                    // Clear existing markers
+                    deleteAllMarkers();
+                    
+                    // Ensure data is an array
+                    const markersData = Array.isArray(data) ? data : [data];
+                    
+                    markersData.forEach(savedMarker => {
+                        if (savedMarker && savedMarker.lat && savedMarker.lng) {
+                            const marker = L.marker([savedMarker.lat, savedMarker.lng], {
+                                draggable: true,
+                                icon: L.icon({
+                                    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${savedMarker.color || 'red'}.png`,
+                                    iconSize: [25, 41],
+                                    iconAnchor: [12, 41],
+                                    popupAnchor: [1, -34]
+                                })
+                            }).addTo(window.map);
+
+                            marker.name = savedMarker.name || 'Unnamed Marker';
+                            marker.image = savedMarker.image || '';
+
+                            updateMarkerPopup(marker, marker.name, marker.image, savedMarker.color || 'red');
+                            updateMarkerTooltip(marker, marker.name, marker.image);
+
+                            window.markers.push(marker);
+                        }
                     });
+                    alert("Markers loaded from cloud successfully!");
                 } else {
-                    alert("No data available");
+                    alert("No markers found in the cloud.");
                 }
             })
             .catch((error) => {
-                console.error("Data could not be loaded:", error); // Debug log
-                alert("Data could not be loaded: " + error);
+                console.error("Error loading markers:", error);
+                alert("Error loading markers: " + error.message);
             });
     }
     
@@ -442,14 +465,18 @@ function importMarkers(event) {
                         iconAnchor: [12, 41],
                         popupAnchor: [1, -34]
                     })
-                }).addTo(map);
+                }).addTo(window.map);
+
+                // Store the name and image directly on the marker object
+                marker.name = savedMarker.name;
+                marker.image = savedMarker.image;
 
                 // Restore popup and tooltip with saved name and image
                 updateMarkerPopup(marker, savedMarker.name, savedMarker.image, savedMarker.color);
                 updateMarkerTooltip(marker, savedMarker.name, savedMarker.image);
                 
-                // Add the marker to the array of markers
-                markers.push(marker);
+                // Add the marker to the window.markers array
+                window.markers.push(marker);
 
                 // Enable dragging event for color update
                 marker.on('dragend', function(event) {
@@ -463,7 +490,7 @@ function importMarkers(event) {
                 });
             });
         };
-        reader.readAsText(file); // Read the file as text
+        reader.readAsText(file);
     }
 }
 

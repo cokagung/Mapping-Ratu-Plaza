@@ -164,33 +164,40 @@
 
     var markers = [];
 
-    function locateUser() {
-        // Request the user's location
-        map.locate({ setView: true, maxZoom: 16 });
-    
-        // Event listener for location found
-        map.on('locationfound', function(e) {
-            var radius = e.accuracy / 2;
-    
-            // Clear previous location marker if any
-            if (typeof userMarker !== 'undefined') {
-                map.removeLayer(userMarker);
-            }
-    
-            // Add a marker at the user's location
-            userMarker = L.marker(e.latlng).addTo(map)
-                .bindPopup("You are within " + radius.toFixed(1) + " meters from this point.")
-                .openPopup();
-    
-            // Add a circle to show the accuracy of the location
-            L.circle(e.latlng, radius).addTo(map);
-        });
-    
-        // Event listener for location error
-        map.on('locationerror', function() {
-            alert("Location access denied.");
-        });
-    }
+    var userLocationMarker; // Variable to store the location marker
+var userLocationCircle; // Variable to store the location circle
+
+function locateUser() {
+    // Request the user's location
+    map.locate({ setView: true, maxZoom: 16 });
+
+    // Event listener for location found
+    map.on('locationfound', function(e) {
+        var radius = e.accuracy / 2;
+
+        // Remove previous location marker and circle if they exist
+        if (userLocationMarker) {
+            map.removeLayer(userLocationMarker);
+        }
+        if (userLocationCircle) {
+            map.removeLayer(userLocationCircle);
+        }
+
+        // Add a marker at the user's location
+        userLocationMarker = L.marker(e.latlng).addTo(map)
+            .bindPopup("You are within " + radius.toFixed(1) + " meters from this point.")
+            .openPopup();
+
+        // Add a circle to show the accuracy of the location
+        userLocationCircle = L.circle(e.latlng, radius).addTo(map);
+    });
+
+    // Event listener for location error
+    map.on('locationerror', function() {
+        alert("Location access denied.");
+    });
+}
+
     
     
     

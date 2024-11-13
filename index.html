@@ -239,7 +239,7 @@
             <label class="button choose" for="file-${marker._leaflet_id}">Choose Image</label>
             <input type="file" id="file-${marker._leaflet_id}" accept="image/*" onchange="addImageToMarker(${marker._leaflet_id})" style="display: none;"><br>`;
         if (imageSrc) {
-            popupContent += `<img src="${imageSrc}" alt="Marker Image" style="width: 100%; max-width: 100px; margin-top: 5px; border-radius: 5px;"><br>`;
+            popupContent += `<img src="${imageSrc}" alt="Marker Image" style="width: 150%; max-width: 150px; margin-top: 5px; border-radius: 5px;"><br>`;
         }
         // Add color selector dropdown
         popupContent += `<label style="margin-top: 5px;">Marker Color:</label>

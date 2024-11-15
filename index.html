@@ -239,7 +239,7 @@ function exportToCSV() {
 
     // Convert data to CSV format
     const csvRows = [];
-    const headers = ['Name', 'PIC Name and telp', 'Merchant telp', 'Color'];
+    const headers = ['Name', 'PIC name and telp', 'Merchant name and telp', 'Color'];
     csvRows.push(headers.join(','));
 
     markerData.forEach(marker => {
@@ -323,7 +323,7 @@ function filterMarkersByName() {
             <b>PIC name and telp:</b>
             <input type="text" id="pic-name-input-${marker._leaflet_id}" value="${picName}" placeholder="Enter PIC name"><br>
             
-            <b>Merchant telp:</b>
+            <b>Merchant name and telp:</b>
             <input type="tel" id="tel-input-${marker._leaflet_id}" value="${telp}" placeholder="Enter telephone"><br>
             
             <button class="button save" onclick="updateMarkerData(${marker._leaflet_id})">Save Details</button>

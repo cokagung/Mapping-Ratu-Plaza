@@ -399,25 +399,35 @@ function filterMarkersByName() {
 
 
     // Function to update the marker's name and tooltip
-    window.updateMarkerData = function(markerId) {
-        var marker = markers.find(m => m._leaflet_id === markerId);
+    window.updateMarkerData = function (markerId) {
+        var marker = markers.find((m) => m._leaflet_id === markerId);
+    
+        // Get updated values from the popup inputs
         var newName = document.getElementById(`name-input-${markerId}`).value;
         var newPicName = document.getElementById(`pic-name-input-${markerId}`).value;
         var newTelp = document.getElementById(`tel-input-${markerId}`).value;
+        var selectedColor = document.getElementById(`color-select-${markerId}`).value;
     
+        // Update marker properties
         marker.name = newName;
         marker.picName = newPicName;
         marker.telp = newTelp;
+        marker.color = selectedColor;
     
+        // Get the image source if present
         var popupContent = marker.getPopup().getContent();
         var imgTag = popupContent.match(/<img src="(.*?)"/);
-        var imageSrc = imgTag ? imgTag[1] : '';
+        var imageSrc = imgTag ? imgTag[1] : "";
     
-        updateMarkerPopup(marker, newName, imageSrc, marker.color, newPicName, newTelp);
-        marker.openPopup();
-
-        alert("Saved successfully!");
+        // Update popup and tooltip with new details
+        updateMarkerPopup(marker, newName, imageSrc, selectedColor, newPicName, newTelp);
+        updateMarkerTooltip(marker, newName, imageSrc);
+    
+        marker.openPopup(); // Reopen the popup to reflect changes
+    
+        alert("Details saved successfully!");
     };
+    
     
 
     // Function to add image to the marker tooltip and popup

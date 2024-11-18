@@ -106,7 +106,6 @@
 <div id="mapid"></div>
 <div>
 
-    <input type="text" id="markerName" placeholder="Marker name">
     <button onclick="addMarker()">Add Marker</button>
     <button onclick="exportMarkers()">Save</button>
     <button onclick="triggerFileInput()">Load</button> <!-- Custom Load button -->
@@ -133,22 +132,46 @@
 
 <script>
     
-    // Your web app's Firebase configuration
-    const firebaseConfig = {
-      apiKey: "AIzaSyD2dimW4R01hWM09D8D_ykDLD4oGwE8YIU",
-      databaseURL: "https://mapping-f9836-default-rtdb.asia-southeast1.firebasedatabase.app/",
-      authDomain: "mapping-f9836.firebaseapp.com",
-      projectId: "mapping-f9836",
-      storageBucket: "mapping-f9836.firebasestorage.app",
-      messagingSenderId: "105631510486",
-      appId: "1:105631510486:web:7c497dcd1a2020f3793e77",
-      measurementId: "G-EPWLXG9F6Z"
-    };
-  
-    // Initialize Firebase
-    const app = firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+    let dbConnection = null;
+
+    function initializeFirebase() {
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyD2dimW4R01hWM09D8D_ykDLD4oGwE8YIU",
+            databaseURL: "https://mapping-f9836-default-rtdb.asia-southeast1.firebasedatabase.app/",
+            authDomain: "mapping-f9836.firebaseapp.com",
+            projectId: "mapping-f9836",
+            storageBucket: "mapping-f9836.firebasestorage.app",
+            messagingSenderId: "105631510486",
+            appId: "1:105631510486:web:7c497dcd1a2020f3793e77",
+            measurementId: "G-EPWLXG9F6Z"
+        };
     
+        // Initialize Firebase if not already initialized
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        // Get database reference
+        return firebase.database();
+    }
+    
+    function getDatabase() {
+        if (!dbConnection) {
+            dbConnection = initializeFirebase();
+            
+            // Set up connection state monitoring
+            const connectedRef = dbConnection.ref(".info/connected");
+            connectedRef.on("value", (snap) => {
+                if (snap.val() === true) {
+                    console.log("Connected to Firebase");
+                } else {
+                    console.log("Disconnected from Firebase");
+                }
+            });
+        }
+        return dbConnection;
+    }
 
   </script>
   
@@ -281,7 +304,7 @@ function filterMarkersByName() {
 }   
 
     function addMarker() {
-        var name = document.getElementById('markerName').value.trim() || 'Unnamed Marker';
+        
         
         var marker = L.marker(map.getCenter(), {
             draggable: true,
@@ -323,7 +346,7 @@ function filterMarkersByName() {
             <b>PIC name and telp:</b>
             <input type="text" id="pic-name-input-${marker._leaflet_id}" value="${picName}" placeholder="Enter PIC name"><br>
             
-            <b>Merchant telp:</b>
+            <b>Merchant name telp:</b>
             <input type="tel" id="tel-input-${marker._leaflet_id}" value="${telp}" placeholder="Enter telephone"><br>
             
             <button class="button save" onclick="updateMarkerData(${marker._leaflet_id})">Save Details</button>
@@ -564,90 +587,82 @@ function importMarkers(event) {
 }
 
 
-function saveMarkersToFirebase() {
-    if (confirm('Are you sure you want to save to cloud?')) {
-        try {
-            const savedMarkers = window.markers.map(marker => {
-                // Extract image URL if available in popup content
-                var popupContent = marker.getPopup().getContent();
-                var imgTag = popupContent.match(/<img src="(.*?)"/);
-                var imageSrc = imgTag ? imgTag[1] : '';
-                const color = getColorFromIconUrl(marker.options.icon.options.iconUrl);
-                console.log("Saving marker:", {
-                    name: marker.name,
-                    image: imageSrc,
-                    color: color
-                });
-                return {
-                    lat: marker.getLatLng().lat,
-                    lng: marker.getLatLng().lng,
-                    name: marker.name || 'Unnamed Marker',
-                    picName: marker.picName || '',
-                    telp: marker.telp || '',
-                    color: color || 'red',
-                    image: imageSrc || ''
-                };
-            });
+async function saveMarkersToFirebase() {
+    if (!confirm('Are you sure you want to save to cloud?')) {
+        return;
+    }
+
+    try {
+        const db = getDatabase();
+        const savedMarkers = window.markers.map(marker => {
+            const popupContent = marker.getPopup().getContent();
+            const imgTag = popupContent.match(/<img src="(.*?)"/);
+            const imageSrc = imgTag ? imgTag[1] : '';
+            const color = getColorFromIconUrl(marker.options.icon.options.iconUrl);
             
-            return database.ref('markersData').set(savedMarkers)
-                .then(() => {
-                    console.log("Markers saved successfully:", savedMarkers);
-                    alert("Markers saved to cloud successfully!");
-                })
-                .catch((error) => {
-                    console.error("Error saving markers:", error);
-                    alert("Error saving markers: " + error.message);
-                });
-        } catch (error) {
-            console.error("Error preparing markers data:", error);
-            alert("Error preparing markers data: " + error.message);
-        }
+            return {
+                lat: marker.getLatLng().lat,
+                lng: marker.getLatLng().lng,
+                name: marker.name || 'Unnamed Marker',
+                picName: marker.picName || '',
+                telp: marker.telp || '',
+                color: color || 'red',
+                image: imageSrc || ''
+            };
+        });
+
+        await db.ref('markersData').set(savedMarkers);
+        alert("Markers saved to cloud successfully!");
+    } catch (error) {
+        console.error("Error saving markers:", error);
+        alert("Error saving markers: " + error.message);
     }
 }
 
-function loadMarkersFromFirebase() {
-    database.ref('markersData').once('value')
-        .then((snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                // Clear existing markers
-                deleteAllMarkers();
-                
-                // Ensure data is an array
-                const markersData = Array.isArray(data) ? data : [data];
-                
-                markersData.forEach(savedMarker => {
-                    if (savedMarker && savedMarker.lat && savedMarker.lng) {
-                        const marker = L.marker([savedMarker.lat, savedMarker.lng], {
-                            draggable: true,
-                            icon: L.icon({
-                                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${savedMarker.color || 'red'}.png`,
-                                iconSize: [25, 41],
-                                iconAnchor: [12, 41],
-                                popupAnchor: [1, -34]
-                            })
-                        }).addTo(window.map);
+async function loadMarkersFromFirebase() {
+    try {
+        const db = getDatabase();
+        const snapshot = await db.ref('markersData').once('value');
+        
+        if (!snapshot.exists()) {
+            alert("No markers found in the cloud.");
+            return;
+        }
 
-                        marker.name = savedMarker.name || 'Unnamed Marker';
-                        marker.picName = savedMarker.picName;
-                        marker.telp = savedMarker.telp;
-                        marker.image = savedMarker.image || '';
+        const data = snapshot.val();
+        deleteAllMarkers();
+        
+        const markersData = Array.isArray(data) ? data : [data];
+        
+        markersData.forEach(savedMarker => {
+            if (savedMarker?.lat && savedMarker?.lng) {
+                const marker = L.marker([savedMarker.lat, savedMarker.lng], {
+                    draggable: true,
+                    icon: L.icon({
+                        iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${savedMarker.color || 'red'}.png`,
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34]
+                    })
+                }).addTo(window.map);
 
-                        updateMarkerPopup(marker, marker.name, marker.image, savedMarker.color || 'red', savedMarker.picName, savedMarker.telp);
-                        updateMarkerTooltip(marker, marker.name, marker.image);
+                marker.name = savedMarker.name || 'Unnamed Marker';
+                marker.picName = savedMarker.picName;
+                marker.telp = savedMarker.telp;
+                marker.image = savedMarker.image || '';
 
-                        window.markers.push(marker);
-                    }
-                });
-                alert("Markers loaded from cloud successfully!");
-            } else {
-                alert("No markers found in the cloud.");
+                updateMarkerPopup(marker, marker.name, marker.image, savedMarker.color || 'red', savedMarker.picName, savedMarker.telp);
+                updateMarkerTooltip(marker, marker.name, marker.image);
+
+                window.markers.push(marker);
             }
-        })
-        .catch((error) => {
-            console.error("Error loading markers:", error);
-            alert("Error loading markers: " + error.message);
         });
+        
+        alert("Markers loaded from cloud successfully!");
+    } catch (error) {
+        console.error("Error loading markers:", error);
+        alert("Error loading markers: " + error.message);
+    }
 }
 
 
@@ -663,6 +678,17 @@ function loadMarkersFromFirebase() {
     function getColorFromIconUrl(iconUrl) {
         return iconUrl.split('-').pop().split('.')[0];
     }
+
+    function cleanupFirebase() {
+        if (dbConnection) {
+            // Remove all active listeners
+            dbConnection.ref().off();
+            dbConnection = null;
+        }
+    }
+    
+    // Add event listener for page unload
+    window.addEventListener('beforeunload', cleanupFirebase);
 </script>
 
 </body>
